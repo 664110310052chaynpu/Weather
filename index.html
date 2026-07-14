@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroMinimal - สภาพอากาศ & PM2.5</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <style>
+        :root {
+            --bg-color: #f7f9fc;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --card-bg: #ffffff;
+            --primary-accent: #3182ce;
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.03);
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+            --radius: 24px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+        
+        /* Glassmorphism Header */
+        .header { 
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 16px; 
+            transition: all 0.3s ease;
+        }
+        .header-logo { font-size: 1.25rem; font-weight: 600; letter-spacing: 1px; cursor: pointer; color: var(--text-main); text-decoration: none; }
+        
+        .header-right { display: flex; align-items: center; gap: 24px; }
+        .time-display { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--text-muted); font-weight: 500; background: #f1f5f9; padding: 8px 16px; border-radius: 12px; }
+        .nav-links { display: flex; gap: 20px; }
+        .nav-links a { color: var(--text-muted); font-weight: 500; cursor: pointer; transition: 0.3s; }
+        .nav-links a:hover { color: var(--text-main); }
+        
+        .main-content { flex: 1; padding: 40px 20px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        
+        /* View Transitions */
+        .view-section { display: none; opacity: 0; transform: translateY(20px); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .view-section.active { display: block; opacity: 1; transform: translateY(0); }
+        
+        .home-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 24px; gap: 16px; }
+        .section-title { font-size: 1.5rem; font-weight: 500; margin: 0; }
+        
+        .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+        
+        /* Hover Effects */
+        .summary-card { 
+            background: var(--card-bg); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow-sm); 
+            cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; gap: 16px; 
+            border: 1px solid rgba(255,255,255,0);
+        }
+        .summary-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); border: 1px solid #e2e8f0; }
+        
+        .card-header { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-weight: 500; }
+        .card-value { font-size: 3rem; font-weight: 600; }
+        .card-time { font-size: 0.9rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+        
+        .timeline-container { 
+            display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px; 
+            scrollbar-width: none; -ms-overflow-style: none; scroll-behavior: smooth; 
+            scroll-snap-type: x mandatory; 
+        }
+        .timeline-container::-webkit-scrollbar { display: none; }
+        .full-view-timeline { padding-left: calc(50% - 50px); padding-right: calc(50% - 50px); }
+        
+        /* Time Box with Animation */
+        .time-box { 
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; 
+            width: 100px; min-width: 100px; height: 135px; 
+            padding: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            gap: 6px; transition: all 0.3s ease; flex-shrink: 0; scroll-snap-align: center; 
+            opacity: 0; transform: translateY(15px); /* เตรียมสำหรับ Stagger Animation */
+        }
+        .time-box.show { opacity: 1; transform: translateY(0); }
+        
+        .time-box-day { font-size: 0.75rem; color: var(--text-muted); margin-bottom: -2px; }
+        .time-box-time { font-size: 1.1rem; font-weight: 600; color: var(--text-main); }
+        .time-box-val { font-size: 1.15rem; font-weight: 600; color: var(--text-main); margin-top: 4px; }
+        
+        .time-box.now { background: var(--primary-accent); border-color: var(--primary-accent); box-shadow: 0 4px 16px rgba(49, 130, 206, 0.4); transform: scale(1.05) translateY(0); }
+        .time-box.now .time-box-day, .time-box.now .time-box-time, .time-box.now .time-box-val { color: #ffffff; }
+        .time-box.now-aqi { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); transform: scale(1.05) translateY(0); }
+
+        .detail-container { background: var(--card-bg); border-radius: var(--radius); padding: 40px; box-shadow: var(--shadow-sm); text-align: center; max-width: 900px; margin: 0 auto; }
+        .back-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; margin-bottom: 24px; transition: 0.3s; }
+        .back-btn:hover { color: var(--text-main); transform: translateX(-5px); }
+        
+        .custom-select { padding: 12px 24px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 1rem; outline: none; min-width: 200px; max-width: 100%; background-color: #f8fafc; cursor: pointer; font-family: inherit; color: var(--text-main); transition: all 0.3s ease; }
+        .custom-select:focus { border-color: var(--primary-accent); background-color: #fff; box-shadow: 0 0 0 4px rgba(49, 130, 206, 0.1); }
+
+        .detail-display h1 { font-size: 5rem; font-weight: 600; margin-top: 20px; transition: color 0.5s ease; }
+        .detail-display p.desc { font-size: 1.2rem; color: var(--text-muted); margin-top: 4px; }
+        .detail-display p.time { font-size: 0.9rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 32px; display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; padding: 6px 16px; border-radius: 20px; }
+        
+        .extra-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 32px; margin-bottom: 32px; }
+        .extra-box { background: #f8fafc; padding: 20px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: all 0.3s ease; }
+        .extra-box:hover { background: #fff; box-shadow: var(--shadow-sm); transform: translateY(-3px); }
+        .extra-box-title { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+        .extra-box-val { font-size: 1.2rem; font-weight: 600; color: var(--text-main); }
+
+        .full-timeline-wrapper { background: #ffffff; padding: 24px 0; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: var(--shadow-sm); text-align: left; overflow: hidden; }
+        .timeline-title { font-size: 1.1rem; font-weight: 500; margin-bottom: 16px; color: var(--text-main); padding: 0 24px; }
+
+        .footer { text-align: center; padding: 30px; color: var(--text-muted); font-size: 0.875rem; border-top: 1px solid #e2e8f0; }
+        .loading { font-size: 1.5rem !important; color: var(--text-muted) !important; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+        @media (max-width: 768px) {
+            .header { padding: 16px 20px; justify-content: center; }
+            .header-right { width: 100%; justify-content: space-between; }
+            .home-header { flex-direction: column; align-items: stretch; }
+            .main-content { padding: 24px 16px; }
+            .detail-container { padding: 24px; }
+            .detail-display h1 { font-size: 4rem; }
+            .full-timeline-wrapper { padding: 16px 0; }
+            .timeline-title { padding: 0 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="header-logo" onclick="navigateTo('home')">AeroMinimal.</div>
+        <div class="header-right">
+            <div class="time-display">
+                <i data-feather="clock" style="width: 16px;"></i>
+                <span id="sys-clock">กำลังโหลด...</span>
+            </div>
+            <nav class="nav-links">
+                <a onclick="navigateTo('home')">หน้าแรก</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- หน้าแรก -->
+        <section id="view-home" class="view-section active">
+            <div class="home-header">
+                <h1 class="section-title">ภาพรวมปัจจุบัน</h1>
+                <select class="custom-select" id="home-location-select" onchange="handleLocationChange(event)"></select>
+            </div>
+            
+            <div class="cards-container">
+                <!-- การ์ดสภาพอากาศ -->
+                <div class="summary-card" onclick="navigateTo('detail', 'weather')">
+                    <div class="card-header">
+                        <i data-feather="cloud" style="color: #3182ce;"></i>
+                        <span>สภาพอากาศปัจจุบัน</span>
+                    </div>
+                    <div class="card-value"><span id="home-temp-value">0</span>°C</div>
+                    <div class="card-time">
+                        <i data-feather="info" style="width: 16px;"></i>
+                        <span>อัปเดต: <span id="home-temp-time">--:--</span> น.</span>
+                    </div>
+                    <div class="timeline-container" id="mini-weather-timeline"></div>
+                </div>
+
+                <!-- การ์ด PM2.5 -->
+                <div class="summary-card" onclick="navigateTo('detail', 'pm25')">
+                    <div class="card-header">
+                        <i data-feather="wind" style="color: #e53e3e;"></i>
+                        <span>คุณภาพอากาศ (AQI)</span>
+                    </div>
+                    <div class="card-value"><span id="home-aqi-value">0</span> <span style="font-size: 1.5rem">AQI</span></div>
+                    <div class="card-time">
+                        <i data-feather="info" style="width: 16px;"></i>
+                        <span>อัปเดต: <span id="home-aqi-time">--:--</span> น.</span>
+                    </div>
+                    <div class="timeline-container" id="mini-aqi-timeline"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- หน้ารายละเอียด -->
+        <section id="view-detail" class="view-section">
+            <button class="back-btn" onclick="navigateTo('home')">
+                <i data-feather="arrow-left" style="width: 20px;"></i> ย้อนกลับ
+            </button>
+
+            <div class="detail-container">
+                <h2 id="detail-title" style="margin-bottom: 8px;">รายงานสภาพอากาศ</h2>
+                
+                <select class="custom-select" id="detail-location-select" style="margin: 24px 0;" onchange="handleLocationChange(event)"></select>
+
+                <div class="detail-display">
+                    <h1 id="display-value-wrapper" class="loading"><span id="display-value">0</span> <span id="display-unit" style="font-size: 2rem;"></span></h1>
+                    <p id="display-desc" class="desc">กำลังโหลดข้อมูล...</p>
+                    <p class="time"><i data-feather="clock" style="width: 14px;"></i> อัปเดตข้อมูลเวลา: <span id="display-time">--:--</span> น.</p>
+                    
+                    <div class="extra-details" id="extra-details-container"></div>
+                    
+                    <!-- กล่องไทม์ไลน์เต็ม -->
+                    <div class="full-timeline-wrapper">
+                        <div class="timeline-title">พยากรณ์รายชั่วโมง (ปัดซ้าย-ขวาเพื่อดู)</div>
+                        <div class="timeline-container full-view-timeline" id="full-detail-timeline"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2026 AeroMinimal. All rights reserved.</p>
+    </footer>
+
+    <script>
+        feather.replace();
+        let currentDetailType = 'weather';
+
+        const provinces = [
+            { name: "กรุงเทพมหานคร", lat: 13.7563, lon: 100.5018 }, { name: "กระบี่", lat: 8.0863, lon: 98.9063 },
+            { name: "กาญจนบุรี", lat: 14.0228, lon: 99.5328 }, { name: "กาฬสินธุ์", lat: 16.4322, lon: 103.5061 },
+            { name: "กำแพงเพชร", lat: 16.4828, lon: 99.5227 }, { name: "ขอนแก่น", lat: 16.4322, lon: 102.8236 },
+            { name: "จันทบุรี", lat: 12.6114, lon: 102.1039 }, { name: "ฉะเชิงเทรา", lat: 13.6904, lon: 101.0719 },
+            { name: "ชลบุรี", lat: 13.3611, lon: 100.9850 }, { name: "ชัยนาท", lat: 15.1852, lon: 100.1251 },
+            { name: "ชัยภูมิ", lat: 15.8063, lon: 102.0315 }, { name: "ชุมพร", lat: 10.4930, lon: 99.1800 },
+            { name: "เชียงราย", lat: 19.9105, lon: 99.8406 }, { name: "เชียงใหม่", lat: 18.7883, lon: 98.9853 },
+            { name: "ตรัง", lat: 7.5563, lon: 99.6114 }, { name: "ตราด", lat: 12.2428, lon: 102.5175 },
+            { name: "ตาก", lat: 16.8840, lon: 99.1258 }, { name: "นครนายก", lat: 14.2069, lon: 101.2131 },
+            { name: "นครปฐม", lat: 13.8199, lon: 100.0443 }, { name: "นครพนม", lat: 17.3920, lon: 104.7788 },
+            { name: "นครราชสีมา", lat: 14.9799, lon: 102.0978 }, { name: "นครศรีธรรมราช", lat: 8.4304, lon: 99.9631 },
+            { name: "นครสวรรค์", lat: 15.6881, lon: 100.1228 }, { name: "นนทบุรี", lat: 13.8591, lon: 100.5217 },
+            { name: "นราธิวาส", lat: 6.4255, lon: 101.8253 }, { name: "น่าน", lat: 18.7756, lon: 100.7730 },
+            { name: "บึงกาฬ", lat: 18.3606, lon: 103.6517 }, { name: "บุรีรัมย์", lat: 14.9930, lon: 103.1029 },
+            { name: "ปทุมธานี", lat: 14.0208, lon: 100.5250 }, { name: "ประจวบคีรีขันธ์", lat: 11.8105, lon: 99.7971 },
+            { name: "ปราจีนบุรี", lat: 14.0510, lon: 101.3734 }, { name: "ปัตตานี", lat: 6.8673, lon: 101.2501 },
+            { name: "พระนครศรีอยุธยา", lat: 14.3532, lon: 100.5690 }, { name: "พะเยา", lat: 19.1666, lon: 99.9022 },
+            { name: "พังงา", lat: 8.4501, lon: 98.5283 }, { name: "พัทลุง", lat: 7.6166, lon: 100.0740 },
+            { name: "พิจิตร", lat: 16.4428, lon: 100.3488 }, { name: "พิษณุโลก", lat: 16.8211, lon: 100.2659 },
+            { name: "เพชรบุรี", lat: 13.1119, lon: 99.9433 }, { name: "เพชรบูรณ์", lat: 16.4206, lon: 101.1561 },
+            { name: "แพร่", lat: 18.1446, lon: 100.1403 }, { name: "ภูเก็ต", lat: 7.8804, lon: 98.3922 },
+            { name: "มหาสารคาม", lat: 16.1852, lon: 103.3015 }, { name: "มุกดาหาร", lat: 16.5443, lon: 104.7118 },
+            { name: "แม่ฮ่องสอน", lat: 19.3006, lon: 97.9654 }, { name: "ยโสธร", lat: 15.7926, lon: 104.1487 },
+            { name: "ยะลา", lat: 6.5401, lon: 101.2823 }, { name: "ร้อยเอ็ด", lat: 16.0538, lon: 103.6520 },
+            { name: "ระนอง", lat: 9.9658, lon: 98.6348 }, { name: "ระยอง", lat: 12.6814, lon: 101.2816 },
+            { name: "ราชบุรี", lat: 13.5283, lon: 99.8134 }, { name: "ลพบุรี", lat: 14.7995, lon: 100.6534 },
+            { name: "ลำปาง", lat: 18.2888, lon: 99.4930 }, { name: "ลำพูน", lat: 18.5745, lon: 99.0087 },
+            { name: "เลย", lat: 17.4860, lon: 101.7223 }, { name: "ศรีสะเกษ", lat: 15.1186, lon: 104.3220 },
+            { name: "สกลนคร", lat: 17.1614, lon: 104.1472 }, { name: "สงขลา", lat: 7.1897, lon: 100.5954 },
+            { name: "สตูล", lat: 6.6238, lon: 100.0674 }, { name: "สมุทรปราการ", lat: 13.5993, lon: 100.5968 },
+            { name: "สมุทรสงคราม", lat: 13.4098, lon: 100.0023 }, { name: "สมุทรสาคร", lat: 13.5475, lon: 100.2736 },
+            { name: "สระแก้ว", lat: 13.8240, lon: 102.0646 }, { name: "สระบุรี", lat: 14.5289, lon: 100.9101 },
+            { name: "สิงห์บุรี", lat: 14.8936, lon: 100.3967 }, { name: "สุโขทัย", lat: 17.0055, lon: 99.8264 },
+            { name: "สุพรรณบุรี", lat: 14.4742, lon: 100.1222 }, { name: "สุราษฎร์ธานี", lat: 9.1333, lon: 99.3333 },
+            { name: "สุรินทร์", lat: 14.8818, lon: 103.4936 }, { name: "หนองคาย", lat: 17.8783, lon: 102.7420 },
+            { name: "หนองบัวลำภู", lat: 17.2045, lon: 102.4407 }, { name: "อ่างทอง", lat: 14.5896, lon: 100.4550 },
+            { name: "อำนาจเจริญ", lat: 15.8617, lon: 104.6258 }, { name: "อุดรธานี", lat: 17.4138, lon: 102.7872 },
+            { name: "อุตรดิตถ์", lat: 17.6201, lon: 100.0993 }, { name: "อุทัยธานี", lat: 15.3789, lon: 100.0246 },
+            { name: "อุบลราชธานี", lat: 15.2287, lon: 104.8564 }
+        ].sort((a, b) => a.name.localeCompare(b.name, 'th'));
+
+        // === 1. JS ANIMATION: ตัวเลขนับขึ้น (Number Count Up) ===
+        function animateValue(objId, start, end, duration) {
+            const obj = document.getElementById(objId);
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                // easeOutQuad
+                const easeOut = 1 - (1 - progress) * (1 - progress);
+                obj.innerText = Math.floor(easeOut * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.innerText = end; // รับประกันเลขจบตรง
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // === 2. JS ANIMATION: กล่องค่อยๆ โผล่ขึ้นมา (Staggered Fade-in) ===
+        function triggerStaggerAnimation(containerId) {
+            const container = document.getElementById(containerId);
+            const boxes = container.querySelectorAll('.time-box');
+            boxes.forEach((box, index) => {
+                setTimeout(() => {
+                    box.classList.add('show');
+                }, index * 50); // ดีเลย์กล่องละ 50ms
+            });
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('sys-clock').innerText = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        setInterval(updateClock, 1000); updateClock();
+
+        let selectedProvince = provinces.find(p => p.name === "นครพนม");
+        const homeSelectEl = document.getElementById('home-location-select');
+        const detailSelectEl = document.getElementById('detail-location-select');
+        
+        provinces.forEach((prov, index) => {
+            let opt1 = new Option(`จ.${prov.name}`, index);
+            let opt2 = new Option(`จ.${prov.name}`, index);
+            if(prov.name === "นครพนม") { opt1.selected = true; opt2.selected = true; }
+            homeSelectEl.add(opt1); detailSelectEl.add(opt2);
+        });
+
+        function handleLocationChange(event) {
+            const selectedIndex = event.target.value;
+            selectedProvince = provinces[selectedIndex];
+            homeSelectEl.value = selectedIndex; detailSelectEl.value = selectedIndex;
+            loadHomeData();
+            if (document.getElementById('view-detail').classList.contains('active')) fetchDataForDetail();
+        }
+
+        function getAQIColorInfo(aqi, isNow) {
+            if(aqi <= 50) return isNow ? { bg: '#38a169', text: '#fff' } : { bg: '#f8fafc', text: '#38a169' };
+            if(aqi <= 100) return isNow ? { bg: '#d69e2e', text: '#fff' } : { bg: '#f8fafc', text: '#d69e2e' };
+            if(aqi <= 150) return isNow ? { bg: '#dd6b20', text: '#fff' } : { bg: '#f8fafc', text: '#dd6b20' };
+            if(aqi <= 200) return isNow ? { bg: '#e53e3e', text: '#fff' } : { bg: '#f8fafc', text: '#e53e3e' };
+            return isNow ? { bg: '#805ad5', text: '#fff' } : { bg: '#f8fafc', text: '#805ad5' };
+        }
+
+        // === 3. JS FEATURE: เปลี่ยนไอคอนตามสภาพอากาศจริง ===
+        function getWeatherIcon(code) {
+            if(code === 0) return 'sun'; // แจ่มใส
+            if(code <= 3) return 'cloud'; // มีเมฆ
+            if(code <= 49) return 'align-justify'; // หมอก (ใช้ขีดๆ แทน)
+            if(code <= 69) return 'cloud-drizzle'; // ฝนตกปรอยๆ
+            if(code <= 79) return 'cloud-snow'; // หิมะ
+            if(code <= 82) return 'cloud-rain'; // ฝนตกหนัก
+            if(code <= 99) return 'cloud-lightning'; // พายุ
+            return 'cloud';
+        }
+
+        function createTimeBox(timeStr, val, type, isNow, weatherCode = 0) {
+            const date = new Date(timeStr);
+            const hours = date.getHours().toString().padStart(2, '0') + ':00';
+            const days = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+            const dayName = days[date.getDay()];
+            
+            let boxHtml = '';
+            
+            if(type === 'weather') {
+                const valText = `${Math.round(val)}°C`;
+                const iconName = getWeatherIcon(weatherCode);
+                boxHtml = `
+                    <div class="time-box ${isNow ? 'now' : ''}">
+                        <div class="time-box-day">${isNow ? 'ตอนนี้' : dayName}</div>
+                        <div class="time-box-time">${hours}</div>
+                        <i data-feather="${iconName}" style="width: 20px; color: ${isNow ? '#fff' : '#a0aec0'}; margin-top: 2px;"></i>
+                        <div class="time-box-val">${valText}</div>
+                    </div>
+                `;
+            } else {
+                const aqiInfo = getAQIColorInfo(val, isNow);
+                boxHtml = `
+                    <div class="time-box ${isNow ? 'now-aqi' : ''}" style="${isNow ? `background: ${aqiInfo.bg}; border-color: ${aqiInfo.bg};` : ''}">
+                        <div class="time-box-day" style="${isNow ? 'color: rgba(255,255,255,0.8);' : ''}">${isNow ? 'ตอนนี้' : dayName}</div>
+                        <div class="time-box-time" style="${isNow ? 'color: #fff;' : ''}">${hours}</div>
+                        <i data-feather="wind" style="width: 20px; color: ${isNow ? 'rgba(255,255,255,0.5)' : '#e2e8f0'}; margin-top: 2px;"></i>
+                        <div class="time-box-val" style="color: ${aqiInfo.text}; margin-top: 0px;">${val} AQI</div>
+                    </div>
+                `;
+            }
+            return boxHtml;
+        }
+
+        async function fetchAPI(lat, lon, type) {
+            try {
+                const url = type === 'weather' 
+                    ? `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&past_days=1&forecast_days=3&timezone=Asia/Bangkok`
+                    : `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,us_aqi&hourly=us_aqi&past_days=1&forecast_days=3&timezone=Asia/Bangkok`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                // === แก้ปัญหาบัค "ตอนนี้" ไม่แสดง ===
+                // API บางทีส่งค่า .current.time เป็น XX:15 ซึ่งไม่ตรงกับ hourly.time พอดี
+                // เราจึงต้องคำนวณหา index ที่เวลาใกล้เคียงกับปัจจุบันที่สุดแทนการใช้ indexOf() ตรงๆ
+                const currentEpoch = new Date(data.current.time).getTime();
+                let closestIndex = 0;
+                let minDiff = Infinity;
+                data.hourly.time.forEach((t, i) => {
+                    const diff = Math.abs(new Date(t).getTime() - currentEpoch);
+                    if(diff < minDiff) { minDiff = diff; closestIndex = i; }
+                });
+
+                return {
+                    current: data.current,
+                    hourlyTimeArray: data.hourly.time,
+                    hourlyValueArray: type === 'weather' ? data.hourly.temperature_2m : data.hourly.us_aqi,
+                    hourlyCodeArray: type === 'weather' ? data.hourly.weather_code : [], // เพิ่ม array เก็บ code สภาพอากาศ
+                    currentIndex: closestIndex 
+                };
+            } catch (error) {
+                console.error(error); return null;
+            }
+        }
+
+        async function loadHomeData() {
+            const wData = await fetchAPI(selectedProvince.lat, selectedProvince.lon, 'weather');
+            const aData = await fetchAPI(selectedProvince.lat, selectedProvince.lon, 'pm25');
+            
+            if(wData) {
+                const targetTemp = Math.round(wData.current.temperature_2m);
+                animateValue("home-temp-value", 0, targetTemp, 1000);
+                document.getElementById('home-temp-time').innerText = wData.current.time.split('T')[1];
+
+                const container = document.getElementById('mini-weather-timeline');
+                container.innerHTML = '';
+                for(let i = wData.currentIndex; i <= wData.currentIndex + 9; i+=3) {
+                    if(wData.hourlyTimeArray[i]) {
+                        container.innerHTML += createTimeBox(wData.hourlyTimeArray[i], wData.hourlyValueArray[i], 'weather', i === wData.currentIndex, wData.hourlyCodeArray[i]);
+                    }
+                }
+                feather.replace();
+                triggerStaggerAnimation('mini-weather-timeline');
+            }
+
+            if(aData) {
+                const aqiVal = aData.current.us_aqi;
+                animateValue("home-aqi-value", 0, aqiVal, 1000);
+                document.getElementById('home-aqi-time').innerText = aData.current.time.split('T')[1];
+                document.getElementById('home-aqi-value').style.color = getAQIColorInfo(aqiVal, false).text;
+
+                const container = document.getElementById('mini-aqi-timeline');
+                container.innerHTML = '';
+                for(let i = aData.currentIndex; i <= aData.currentIndex + 9; i+=3) {
+                    if(aData.hourlyTimeArray[i]) {
+                        container.innerHTML += createTimeBox(aData.hourlyTimeArray[i], aData.hourlyValueArray[i], 'pm25', i === aData.currentIndex);
+                    }
+                }
+                feather.replace();
+                triggerStaggerAnimation('mini-aqi-timeline');
+            }
+        }
+
+        async function fetchDataForDetail() {
+            const valWrapperEl = document.getElementById('display-value-wrapper');
+            const valEl = document.getElementById('display-value');
+            const unitEl = document.getElementById('display-unit');
+            const descEl = document.getElementById('display-desc');
+            const timeEl = document.getElementById('display-time');
+            const extraContainer = document.getElementById('extra-details-container');
+            const timelineContainer = document.getElementById('full-detail-timeline');
+            
+            valWrapperEl.className = 'loading'; valEl.innerText = '0'; unitEl.innerText = '';
+            valWrapperEl.style.color = 'var(--text-muted)';
+            descEl.innerText = 'กำลังคำนวณข้อมูล...'; timeEl.innerText = '--:--'; extraContainer.innerHTML = ''; timelineContainer.innerHTML = '';
+
+            const data = await fetchAPI(selectedProvince.lat, selectedProvince.lon, currentDetailType);
+            
+            if(data) {
+                valWrapperEl.className = ''; 
+                valWrapperEl.style.color = 'var(--text-main)';
+                timeEl.innerText = data.current.time.split('T')[1];
+
+                if(currentDetailType === 'weather') {
+                    const targetVal = Math.round(data.current.temperature_2m);
+                    animateValue("display-value", 0, targetVal, 1200);
+                    unitEl.innerText = '°C';
+                    
+                    descEl.innerText = 'อุณหภูมิปัจจุบันและแนวโน้มล่วงหน้า';
+                    extraContainer.innerHTML = `
+                        <div class="extra-box"><i data-feather="thermometer" style="color: var(--primary-accent); margin-bottom: 4px;"></i><span class="extra-box-title">รู้สึกเหมือน</span><span class="extra-box-val">${Math.round(data.current.apparent_temperature)}°C</span></div>
+                        <div class="extra-box"><i data-feather="droplet" style="color: var(--primary-accent); margin-bottom: 4px;"></i><span class="extra-box-title">ความชื้น</span><span class="extra-box-val">${data.current.relative_humidity_2m}%</span></div>
+                        <div class="extra-box"><i data-feather="wind" style="color: var(--primary-accent); margin-bottom: 4px;"></i><span class="extra-box-title">ความเร็วลม</span><span class="extra-box-val">${data.current.wind_speed_10m} km/h</span></div>
+                    `;
+                } else {
+                    const aqiVal = data.current.us_aqi;
+                    animateValue("display-value", 0, aqiVal, 1200);
+                    unitEl.innerText = 'AQI';
+                    
+                    valWrapperEl.style.color = getAQIColorInfo(aqiVal, false).text;
+                    descEl.innerText = 'ดัชนีคุณภาพอากาศและแนวโน้มล่วงหน้า';
+                    extraContainer.innerHTML = `
+                        <div class="extra-box"><i data-feather="alert-circle" style="color: var(--primary-accent); margin-bottom: 4px;"></i><span class="extra-box-title">ฝุ่น PM 2.5</span><span class="extra-box-val">${data.current.pm2_5} µg/m³</span></div>
+                        <div class="extra-box"><i data-feather="alert-triangle" style="color: var(--primary-accent); margin-bottom: 4px;"></i><span class="extra-box-title">ฝุ่น PM 10</span><span class="extra-box-val">${data.current.pm10} µg/m³</span></div>
+                    `;
+                }
+                
+                for(let i = Math.max(0, data.currentIndex - 24); i <= data.currentIndex + 48; i++) {
+                    if(data.hourlyTimeArray[i]) {
+                        timelineContainer.innerHTML += createTimeBox(data.hourlyTimeArray[i], data.hourlyValueArray[i], currentDetailType, i === data.currentIndex, currentDetailType === 'weather' ? data.hourlyCodeArray[i] : 0);
+                    }
+                }
+                feather.replace();
+                triggerStaggerAnimation('full-detail-timeline');
+
+                setTimeout(() => {
+                    const currentBox = timelineContainer.querySelector('.now') || timelineContainer.querySelector('.now-aqi');
+                    if(currentBox) {
+                        const centerPos = currentBox.offsetLeft - (timelineContainer.clientWidth / 2) + (currentBox.clientWidth / 2);
+                        timelineContainer.scrollTo({ left: centerPos, behavior: 'smooth' });
+                    }
+                }, 200); 
+            }
+        }
+
+        function navigateTo(view, type = null) {
+            // ทำระบบ Transition เวลาเปลี่ยนหน้าให้ดูสมูท
+            const sections = document.querySelectorAll('.view-section');
+            sections.forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            setTimeout(() => {
+                const targetView = document.getElementById('view-' + view);
+                targetView.classList.add('active');
+
+                if (view === 'detail' && type) {
+                    currentDetailType = type;
+                    document.getElementById('detail-title').innerText = type === 'weather' ? 'รายงานสภาพอากาศ' : 'รายงานค่าฝุ่น';
+                    fetchDataForDetail();
+                } else if (view === 'home') {
+                    loadHomeData();
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 100); // ดีเลย์นิดนึงเพื่อให้ Effect Fade-out ทำงาน
+        }
+
+        loadHomeData();
+    </script>
+</body>
+</html>
